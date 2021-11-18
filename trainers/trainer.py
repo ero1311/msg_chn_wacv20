@@ -44,7 +44,7 @@ class Trainer(object):
     def train_epoch(self):
         raise NotImplementedError
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, metric):
         """Saves a checkpoint of the network and other variables."""
 
         net_type = type(self.net).__name__
@@ -63,7 +63,7 @@ class Trainer(object):
         if not os.path.exists(chkpt_path):
             os.makedirs(chkpt_path)
 
-        file_path = '{}/{}_ep{:04d}.pth.tar'.format(chkpt_path, net_type, self.epoch)
+        file_path = '{}/{}_{}_best.pth.tar'.format(chkpt_path, net_type, metric)
         torch.save(state, file_path)
 
     def load_checkpoint(self, checkpoint=None):

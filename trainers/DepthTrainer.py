@@ -27,7 +27,7 @@ err_metrics = ['MAE()', 'RMSE()','iMAE()', 'iRMSE()']
 
 class KittiDepthTrainer(Trainer):
     def __init__(self, net, params, optimizer, objective, lr_scheduler, dataloaders, dataset_sizes,
-                 workspace_dir, sets=['train', 'val'], use_load_checkpoint=None, K= None):
+                 workspace_dir, sets=['train', 'val'], use_load_checkpoint=None, K= None, logger=None):
 
         # Call the constructor of the parent class (trainer)
         super(KittiDepthTrainer, self).__init__(net, optimizer, lr_scheduler, objective, use_gpu=params['use_gpu'],
@@ -37,7 +37,9 @@ class KittiDepthTrainer(Trainer):
         self.dataloaders = dataloaders
         self.dataset_sizes = dataset_sizes
         self.use_load_checkpoint = use_load_checkpoint
-
+        self.logger = logger
+        self.stats = {}
+        self.best_err = {}
         self.params = params
         self.save_chkpt_each = params['save_chkpt_each']
         self.sets = sets
@@ -46,8 +48,12 @@ class KittiDepthTrainer(Trainer):
 
         self.exp_name = params['exp_name']
 
-        for s in self.sets: self.stats[s + '_loss'] = []
-
+        for s in self.sets:
+            self.stats['{}_loss'.format(s)] = []
+            for m in err_metrics:
+                self.stats['{}_{}'.format(s, m[:-2])] = []
+        for m in err_metrics:
+            self.best_err[m[:-2]] = float('inf')
     ####### Training Function #######
 
     def train(self, max_epochs):
@@ -92,14 +98,17 @@ class KittiDepthTrainer(Trainer):
 
             # Train the epoch
             loss_meter = self.train_epoch()
-
+            self.evaluate()
+            self._dump_log()
             # Add the average loss for this epoch to stats
-            for s in self.sets: self.stats[s + '_loss'].append(loss_meter[s].avg)
+            #for s in self.sets: self.stats[s + '_loss'].append(loss_meter[s].avg)
 
             # Save checkpoint
-            if self.use_save_checkpoint and (self.epoch) % self.save_chkpt_each == 0:
-                self.save_checkpoint()
-                print('\n => Checkpoint was saved successfully!\n')
+            for m in err_metrics:
+                if self.stats['val_{}'.format(m[:-2])][self.epoch-1] < self.best_err[m[:-2]]:
+                    self.best_err[m[:-2]] = self.stats['val_{}'.format(m[:-2])][self.epoch-1]
+                    self.save_checkpoint(metric=m[:-2])
+                    print('\n => Best checkpoint by {} was saved successfully!\n'.format(m[:-2]))
 
             end_epoch_time = time.time()
             print('End the %d th epoch at ' % self.epoch)
@@ -200,11 +209,13 @@ class KittiDepthTrainer(Trainer):
 
         # AverageMeters for Loss
         loss_meter = {}
-        for s in self.sets: loss_meter[s] = AverageMeter()
-
-        # AverageMeters for error metrics
         err = {}
-        for m in err_metrics: err[m] = AverageMeter()
+        for s in self.sets: 
+            loss_meter[s] = AverageMeter()
+            err[s] = {}
+            # AverageMeters for error metrics
+            for m in err_metrics: 
+                err[s][m] = AverageMeter()
 
         # AverageMeters for time
         times = AverageMeter()
@@ -237,41 +248,39 @@ class KittiDepthTrainer(Trainer):
                     duration = time.time() - start_time
                     times.update(duration / inputs_d.size(0), inputs_d.size(0))
 
-                    if s == 'selval' or s == 'val' or s == 'test':
+                    # Calculate loss for valid pixel in the ground truth
+                    loss = self.objective(outputs, labels, self.epoch)
 
-                        # Calculate loss for valid pixel in the ground truth
-                        loss = self.objective(outputs, labels, self.epoch)
-
-                        # statistics
-                        loss_meter[s].update(loss.item(), inputs_d.size(0))
+                    # statistics
+                    loss_meter[s].update(loss.item(), inputs_d.size(0))
 
 
-                        # Convert data to depth in meters before error metrics
-                        outputs[outputs == 0] = -1
-                        if not self.load_rgb:
-                            outputs[outputs == outputs[0, 0, 0, 0]] = -1
-                        labels[labels == 0] = -1
-                        if self.params['invert_depth']:
-                            outputs = 1 / outputs
-                            labels = 1 / labels
-                        outputs[outputs == -1] = 0
-                        labels[labels == -1] = 0
-                        outputs *= self.params['data_normalize_factor'] / 256
-                        labels *= self.params['data_normalize_factor'] / 256
+                    # Convert data to depth in meters before error metrics
+                    outputs[outputs == 0] = -1
+                    if not self.load_rgb:
+                        outputs[outputs == outputs[0, 0, 0, 0]] = -1
+                    labels[labels == 0] = -1
+                    if self.params['invert_depth']:
+                        outputs = 1 / outputs
+                        labels = 1 / labels
+                    outputs[outputs == -1] = 0
+                    labels[labels == -1] = 0
+                    outputs *= self.params['data_normalize_factor'] / 256
+                    labels *= self.params['data_normalize_factor'] / 256
 
-                        # Calculate error metrics
-                        for m in err_metrics:
-                            if m.find('Delta') >= 0:
-                                fn = globals()['Deltas']()
-                                error = fn(outputs, labels)
-                                err['Delta1'].update(error[0], inputs_d.size(0))
-                                err['Delta2'].update(error[1], inputs_d.size(0))
-                                err['Delta3'].update(error[2], inputs_d.size(0))
-                                break
-                            else:
-                                fn = eval(m)  # globals()[m]()
-                                error = fn(outputs, labels)
-                                err[m].update(error.item(), inputs_d.size(0))
+                    # Calculate error metrics
+                    for m in err_metrics:
+                        if m.find('Delta') >= 0:
+                            fn = globals()['Deltas']()
+                            error = fn(outputs, labels)
+                            err['Delta1'].update(error[0], inputs_d.size(0))
+                            err['Delta2'].update(error[1], inputs_d.size(0))
+                            err['Delta3'].update(error[2], inputs_d.size(0))
+                            break
+                        else:
+                            fn = eval(m)  # globals()[m]()
+                            error = fn(outputs, labels)
+                            err[s][m].update(error.item(), inputs_d.size(0))
 
                     # Save output images (optional)
 
@@ -290,21 +299,33 @@ class KittiDepthTrainer(Trainer):
 
                 print('Evaluation results on [{}]:\n============================='.format(s))
                 print('[{}]: {:.8f}'.format('Loss', loss_meter[s].avg))
-                for m in err_metrics: print('[{}]: {:.8f}'.format(m, err[m].avg))
+                self.stats['{}_loss'.format(s)].append(loss_meter[s].avg)
+                for m in err_metrics: 
+                    print('[{}]: {:.8f}'.format(m, err[s][m].avg))
+                    self.stats['{}_{}'.format(s, m[:-2])].append(err[s][m].avg)
                 print('[{}]: {:.4f}'.format('Time', times.avg))
                 print('[{}]: {:.4f}'.format('Time_av', average_time))
 
-                # Save evaluation metric to text file
-                fname = 'error_' + s + '_epoch_' + str(self.epoch - 1) + '.txt'
-                with open(os.path.join(self.workspace_dir, fname), 'w') as text_file:
-                    text_file.write(
-                        'Evaluation results on [{}], Epoch [{}]:\n==========================================\n'.format(
-                            s, str(self.epoch - 1)))
-                    text_file.write('[{}]: {:.8f}\n'.format('Loss', loss_meter[s].avg))
-                    for m in err_metrics: text_file.write('[{}]: {:.8f}\n'.format(m, err[m].avg))
-                    text_file.write('[{}]: {:.4f}\n'.format('Time', times.avg))
-
                 torch.cuda.empty_cache()
+    
+    def _dump_log(self):
+        self.logger.add_scalars(
+            "log/loss",
+            {
+                "train": self.stats["train_loss"][self.epoch-1],
+                "val": self.stats["val_loss"][self.epoch-1]
+            },
+            self.epoch
+        )
+        for m in err_metrics:
+            self.logger.add_scalars(
+                "eval/{}".format(m[:-2]),
+                {
+                    "train": self.stats["train_{}".format(m[:-2])][self.epoch-1],
+                    "val": self.stats["val_{}".format(m[:-2])][self.epoch-1]
+                },
+                self.epoch
+            )
 
 
 

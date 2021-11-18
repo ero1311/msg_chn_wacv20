@@ -11,6 +11,7 @@ __maintainer__ = "Abdelrahman Eldesokey"
 __email__ = "abdo.eldesokey@gmail.com"
 ########################################
 
+import copy
 import os
 import torch
 from torchvision import transforms
@@ -18,6 +19,7 @@ from torch.utils.data import DataLoader, Dataset
 from dataloader.KittiDepthDataset import KittiDepthDataset
 import random
 import glob
+from copy import deepcopy
 num_worker = 8
 
 def KittiDataLoader(params):
@@ -64,12 +66,15 @@ def KittiDataLoader(params):
     val_gt_path = os.path.join(ds_dir, 'data_depth_annotated/val')
 
     val_transform = transforms.Compose([transforms.CenterCrop((352, 1216))])
-
-    image_datasets['val'] = eval(dataset)(val_data_path, val_gt_path, setname='val', transform=val_transform,
-                                              norm_factor=norm_factor, invert_depth=invert_depth,
-                                              rgb_dir=rgb_dir, rgb2gray=rgb2gray, fill_depth=fill_depth, flip=flip)
-    dataloaders['val'] = DataLoader(image_datasets['val'], shuffle=False, batch_size=params['val_batch_sz'],
-                                    num_workers=num_worker)
+    if params['debug']:
+        image_datasets['val'] = deepcopy(image_datasets['train'])
+        dataloaders['val'] = deepcopy(dataloaders['train'])
+    else:
+        image_datasets['val'] = eval(dataset)(val_data_path, val_gt_path, setname='val', transform=val_transform,
+                                                norm_factor=norm_factor, invert_depth=invert_depth,
+                                                rgb_dir=rgb_dir, rgb2gray=rgb2gray, fill_depth=fill_depth, flip=flip)
+        dataloaders['val'] = DataLoader(image_datasets['val'], shuffle=False, batch_size=params['val_batch_sz'],
+                                        num_workers=num_worker)
     dataset_sizes['val'] = {len(image_datasets['val'])}
 
     ###### Selected Validation set ######

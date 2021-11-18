@@ -1,5 +1,6 @@
 {   "use_gpu": true,
-    "gpu_id": 0,
+    "debug": true,
+    "gpu_id": "0",
     "invert_depth": false,
     "data_normalize_factor": 256.0,
     "dataset_dir": "/mnt/raid/yan/KITTI/KITTIDepth/",

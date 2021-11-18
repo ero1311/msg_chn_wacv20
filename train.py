@@ -18,11 +18,14 @@ import importlib
 import json
 import argparse
 import numpy as np
+import glob
 
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
+from os.path import join, basename, exists
 
 from dataloader.DataLoaders import *
 from modules.losses import *
@@ -34,7 +37,7 @@ cudnn.enabled = True
 cudnn.benchmark = True
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 
 #torch.manual_seed(1)
 torch.cuda.manual_seed(1)
@@ -55,18 +58,28 @@ args = parser.parse_args()
 # Path to the workspace directory
 training_ws_path = 'workspace/'
 exp = args.exp
-exp_dir = os.path.join(training_ws_path, exp)
+exp_dir = join(training_ws_path, exp)
 
 # Add the experiment's folder to python path
 sys.path.append(exp_dir)
 
 # Read parameters file
-with open(os.path.join(exp_dir, 'params.json'), 'r') as fp:
+with open(join(exp_dir, 'params.json'), 'r') as fp:
     params = json.load(fp)
-#params['gpu_id'] = "0"
 
+experiments = list(glob.iglob(join(exp_dir, 'experiment_')))
+if len(experiments) == 0:
+    experiment = "experiment_0"
+else:
+    max_id = max(experiments, key=lambda x: int(basename(x).split("_")[1]))
+    experiment = "experiment_" + str(int(basename(max_id).split("_")[1]) + 1)
+exp_dir = join(exp_dir, experiment)
+if not exists(exp_dir):
+    os.makedirs(join(exp_dir, 'tensorboard'))
+
+logger = SummaryWriter(join(exp_dir, 'tensorboard'))
 # Use GPU or not
-#device = torch.device("cuda:" + str(params['gpu_id']) if torch.cuda.is_available() else "cpu")
+
 device = torch.device("cuda:" + params['gpu_id'] if torch.cuda.is_available() else "cpu")
 
 # Dataloader
@@ -85,7 +98,7 @@ t = importlib.import_module('trainers.' + params['trainer'])
 
 if args.mode == 'train':
     mode = 'train'  # train    eval
-    sets = ['train']  # train  selval
+    sets = ['train', 'val']  # train  selval
 elif args.mode == 'eval':
     mode = 'eval'  # train    eval
     sets = [args.set]  # train  selval
@@ -106,7 +119,7 @@ optimizer = getattr(optim, params['optimizer'])(parameters, lr=params['lr'],
 lr_decay = lr_scheduler.StepLR(optimizer, step_size=params['lr_decay_step'], gamma=params['lr_decay'])
 
 mytrainer = t.KittiDepthTrainer(model, params, optimizer, objective, lr_decay, dataloaders, dataset_sizes,
-                                    workspace_dir=exp_dir, sets=sets, use_load_checkpoint=args.chkpt)
+                                    workspace_dir=exp_dir, sets=sets, use_load_checkpoint=args.chkpt, logger=logger)
 
 if mode == 'train':
     # train the network
