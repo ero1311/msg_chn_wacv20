@@ -63,7 +63,7 @@ sys.path.append(exp_dir)
 # Read parameters file
 with open(os.path.join(exp_dir, 'params.json'), 'r') as fp:
     params = json.load(fp)
-params['gpu_id'] = "0"
+#params['gpu_id'] = "0"
 
 # Use GPU or not
 #device = torch.device("cuda:" + str(params['gpu_id']) if torch.cuda.is_available() else "cpu")
