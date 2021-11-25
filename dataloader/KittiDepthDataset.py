@@ -106,8 +106,6 @@ class KittiDepthDataset(Dataset):
 
 
 
-
-
         if self.rgb2gray:
             t = torchvision.transforms.Grayscale(1)
             rgb = t(rgb)

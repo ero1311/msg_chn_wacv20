@@ -14,7 +14,6 @@ __email__ = "abdo.eldesokey@gmail.com"
 from trainers.trainer import Trainer  # from CVLPyDL repo
 import torch
 
-import matplotlib.pyplot as plt
 import os.path
 from utils.AverageMeter import AverageMeter
 from utils.saveTensorToImage import *
@@ -22,6 +21,7 @@ from utils.ErrorMetrics import *
 import time
 from modules.losses import *
 import cv2
+import torchvision
 err_metrics = ['MAE()', 'RMSE()','iMAE()', 'iRMSE()']
 
 
@@ -47,7 +47,7 @@ class KittiDepthTrainer(Trainer):
         self.load_rgb = params['load_rgb'] if 'load_rgb' in params else False
 
         self.exp_name = params['exp_name']
-
+        self.vis_id = np.random.randint(low=0, high=len(self.dataloaders['val']))
         for s in self.sets:
             self.stats['{}_loss'.format(s)] = []
             for m in err_metrics:
@@ -237,7 +237,6 @@ class KittiDepthTrainer(Trainer):
                     C = C.to(device)
                     labels = labels.to(device)
                     inputs_rgb = inputs_rgb.to(device)
-
                     outputs = self.net(inputs_d, inputs_rgb)
 
 
@@ -284,14 +283,16 @@ class KittiDepthTrainer(Trainer):
 
                     # Save output images (optional)
 
-                    if s in ['test']:
-                        outputs = outputs.data
+                    if self.vis_id in item_idxs and s == 'val' and (self.epoch - 1) % self.params["vis_every"] == 0:
+                        vis_id_pos = torch.where(item_idxs == self.vis_id)[0]
+                        outputs = outputs[vis_id_pos].detach().cpu().numpy()
+                        labels = labels[vis_id_pos].detach().cpu().numpy()
+                        inputs_d = inputs_d[vis_id_pos].detach().cpu().numpy()
+                        inputs_rgb = inputs_rgb[vis_id_pos].detach().cpu().numpy()
 
-                        outputs *= 256
-
-                        saveTensorToImage(outputs, item_idxs, os.path.join(self.workspace_dir,
-                                                                           s + '_output_' + 'epoch_' + str(
-                                                                               self.epoch)))
+                        saveTensorToImage(outputs, labels, inputs_d, inputs_rgb, os.path.join(self.workspace_dir,
+                                                                        "visualizations"), self.epoch)
+                    
 
 
 

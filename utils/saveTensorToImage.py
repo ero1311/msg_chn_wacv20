@@ -11,27 +11,35 @@ __maintainer__ = "Abdelrahman Eldesokey"
 __email__ = "abdo.eldesokey@gmail.com"
 ########################################
 
+from typing import final
 import torch
 import os
 import sys
 #sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
+cmap = plt.cm.jet
+
+def colorize_depth(x):
+    depth = np.squeeze(x)
+    depth = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))
+    depth = 255 * cmap(depth)[:, :, :3]
+    return depth.astype('uint8')
 
 # This function takes a 4D tensor in the form NxCxWxH and save it to images according to idxs
-def saveTensorToImage(t, idxs, save_to_path):
+def saveTensorToImage(outputs, labels, inputs_d, inputs_rgb, save_to_path, epoch):
     if os.path.exists(save_to_path) == False:
         os.mkdir(save_to_path)
 
-    for i in range(t.size(0)):
-        im = t[i, :, :, :].detach().data.cpu().numpy()
-        im = np.transpose(im, (1, 2, 0)).astype(np.uint16)
-        '''imout = np.zeros((374,1238,1))
-        imout[374-352:,:,:] = im[:,5:-5,:]'''
-        imout = im
-
-        cv2.imwrite(os.path.join(save_to_path, str(idxs[i].data.cpu().numpy()).zfill(10) + '.png'), imout,
-                    [cv2.IMWRITE_PNG_COMPRESSION, 4])
+    final_img = []
+    final_img.append(np.transpose(255 * np.squeeze(inputs_rgb), (1, 2, 0)).astype('uint8'))
+    final_img.append(colorize_depth(inputs_d))
+    final_img.append(colorize_depth(outputs))
+    final_img.append(colorize_depth(labels))
+    final_img = np.hstack(final_img).astype('uint8')
+    imout = cv2.cvtColor(final_img, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(os.path.join(save_to_path, str(epoch - 1).zfill(10) + '.png'), imout)
 
 

@@ -67,7 +67,7 @@ sys.path.append(exp_dir)
 with open(join(exp_dir, 'params.json'), 'r') as fp:
     params = json.load(fp)
 
-experiments = list(glob.iglob(join(exp_dir, 'experiment_')))
+experiments = list(glob.iglob(join(exp_dir, 'experiment_*')))
 if len(experiments) == 0:
     experiment = "experiment_0"
 else:
