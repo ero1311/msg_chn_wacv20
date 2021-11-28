@@ -34,3 +34,11 @@ class MSELoss(nn.Module):
         val_pixels = torch.ne(target, 0).float().cuda()
         loss = target * val_pixels - outputs * val_pixels
         return torch.sum(loss ** 2) / torch.sum(val_pixels)
+
+class GaussianNLL(nn.Module):
+    def __init__(self) -> None:
+        super(GaussianNLL, self).__init__()
+
+    def forward(self, outputs_d, outputs_var, target):
+        val_pixels = torch.ne(target, 0)
+        return F.gaussian_nll_loss(outputs_d[val_pixels], target[val_pixels], outputs_var[val_pixels])

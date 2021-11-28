@@ -132,10 +132,11 @@ class DepthDecoder(nn.Module):
                                   nn.Conv2d(layers // 2, layers // 2, filter_size, stride=1, padding=padding),
                                   )
 
-        self.prdct = nn.Sequential(nn.ReLU(),
+        self.out_base = nn.Sequential(nn.ReLU(),
                                    nn.Conv2d(layers // 2, layers // 2, filter_size, stride=1, padding=padding),
-                                   nn.ReLU(),
-                                   nn.Conv2d(layers // 2, 1, filter_size, stride=1, padding=padding))
+                                   nn.ReLU())
+        self.output_d = nn.Conv2d(layers // 2, 1, filter_size, stride=1, padding=padding)
+        self.variance = nn.Conv2d(layers // 2, 1, filter_size, stride=1, padding=padding)
 
         # Init Weights
         for m in self.modules():
@@ -155,9 +156,11 @@ class DepthDecoder(nn.Module):
         x4 = self.dec1(x1 + x3)  # 1/1 input size
 
         ### prediction
-        output_d = self.prdct(x4 + x0)
+        out_base = self.out_base(x4 + x0)
+        output_d = self.output_d(out_base)
+        var = torch.exp(self.variance(out_base))
 
-        return x2, x3, x4, output_d
+        return x2, x3, x4, output_d, var
 
 
 class network(nn.Module):
@@ -192,6 +195,7 @@ class network(nn.Module):
         ## for the 1/2 res
         input_d12 = F.avg_pool2d(input_d, 2, 2) / (F.avg_pool2d(C, 2, 2) + 0.0001)
         predict_d12 = F.interpolate(dcd_d14[3], scale_factor=2, mode='bilinear', align_corners=True)
+        var_d12 = F.interpolate(dcd_d14[4], scale_factor=2, mode='bilinear', align_corners=True)
         input_12 = torch.cat((input_d12, predict_d12), 1)
 
         enc_d12 = self.depth_encoder2(input_12, 2, dcd_d14[0], dcd_d14[1], dcd_d14[2])
@@ -199,16 +203,20 @@ class network(nn.Module):
 
         ## for the 1/1 res
         predict_d11 = F.interpolate(dcd_d12[3] + predict_d12, scale_factor=2, mode='bilinear', align_corners=True)
+        var_d11 = F.interpolate(dcd_d12[4] + var_d12, scale_factor=2, mode='bilinear', align_corners=True)
         input_11 = torch.cat((input_d, predict_d11), 1)
 
         enc_d11 = self.depth_encoder3(input_11, 2, dcd_d12[0], dcd_d12[1], dcd_d12[2])
         dcd_d11 = self.depth_decoder3(enc_d11, enc_c[0:3])
 
         output_d11 = dcd_d11[3] + predict_d11
+        output_var_d11 = dcd_d11[4] + var_d11
         output_d12 = predict_d11
+        output_var_d12 = var_d11
         output_d14 = F.interpolate(dcd_d14[3], scale_factor=4, mode='bilinear', align_corners=True)
+        output_var_d14 = F.interpolate(dcd_d14[4], scale_factor=4, mode='bilinear', align_corners=True)
 
-        return output_d11, output_d12, output_d14,
+        return output_d11, output_var_d11, output_d12, output_var_d12, output_d14, output_var_d14
 
 
 
