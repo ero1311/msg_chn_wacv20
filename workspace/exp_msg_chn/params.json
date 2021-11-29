@@ -13,7 +13,7 @@
     "test_batch_sz": 1,
     "loss": "GaussianNLL",
     "optimizer": "Adam",
-    "lr": 0.001,
+    "lr": 0.0001,
     "weight_decay": 0.0002,
     "lr_decay": 0.5,
     "lr_decay_step": 5,
