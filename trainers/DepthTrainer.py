@@ -131,49 +131,52 @@ class KittiDepthTrainer(Trainer):
         device = torch.device("cuda:" + str(self.params['gpu_id']) if torch.cuda.is_available() else "cpu")
 
         loss_meter = {}
-        for s in self.sets: loss_meter[s] = AverageMeter()
+        for s in self.sets:
+            if s not in ["val", "selval", "test"]:
+                loss_meter[s] = AverageMeter()
 
         for s in self.sets:
             # Iterate over data.
-            for data in self.dataloaders[s]:
-                start_iter_time = time.time()
-                inputs_d, C, labels, item_idxs, inputs_rgb = data
-                inputs_d = inputs_d.to(device)
-                C = C.to(device)
-                labels = labels.to(device)
-                inputs_rgb = inputs_rgb.to(device)
+            if s not in ["val", "selval", "test"]:
+                for data in self.dataloaders[s]:
+                    start_iter_time = time.time()
+                    inputs_d, C, labels, item_idxs, inputs_rgb = data
+                    inputs_d = inputs_d.to(device)
+                    C = C.to(device)
+                    labels = labels.to(device)
+                    inputs_rgb = inputs_rgb.to(device)
 
-                outputs = self.net(inputs_d, inputs_rgb)
-                # Calculate loss for valid pixel in the ground truth
-                loss11 = self.objective(outputs[0], labels)
-                loss12 = self.objective(outputs[1], labels)
-                loss14 = self.objective(outputs[2], labels)
+                    outputs = self.net(inputs_d, inputs_rgb)
+                    # Calculate loss for valid pixel in the ground truth
+                    loss11 = self.objective(outputs[0], labels)
+                    loss12 = self.objective(outputs[1], labels)
+                    loss14 = self.objective(outputs[2], labels)
 
-                if self.epoch < 6:
-                    loss = loss14 + loss12 + loss11
-                elif self.epoch < 11:
-                    loss = 0.1 * loss14 + 0.1 * loss12 + loss11
-                else:
-                    loss = loss11
+                    if self.epoch < 6:
+                        loss = loss14 + loss12 + loss11
+                    elif self.epoch < 11:
+                        loss = 0.1 * loss14 + 0.1 * loss12 + loss11
+                    else:
+                        loss = loss11
 
-                # backward + optimize only if in training phase
-                loss.backward()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+                    # backward + optimize only if in training phase
+                    loss.backward()
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
 
 
-                # statistics
-                loss_meter[s].update(loss11.item(), inputs_d.size(0))
+                    # statistics
+                    loss_meter[s].update(loss11.item(), inputs_d.size(0))
 
-                end_iter_time = time.time()
-                iter_duration = end_iter_time - start_iter_time
-                if self.params['print_time_each_iter']:
-                    print('finish the iteration in %.2f s.\n' % (
-                        iter_duration))
-                    print('Loss within the curt iter: {:.8f}\n'.format(loss_meter[s].avg))
+                    end_iter_time = time.time()
+                    iter_duration = end_iter_time - start_iter_time
+                    if self.params['print_time_each_iter']:
+                        print('finish the iteration in %.2f s.\n' % (
+                            iter_duration))
+                        print('Loss within the curt iter: {:.8f}\n'.format(loss_meter[s].avg))
 
-            print('[{}] Loss: {:.8f}'.format(s, loss_meter[s].avg))
-            torch.cuda.empty_cache()
+                print('[{}] Loss: {:.8f}'.format(s, loss_meter[s].avg))
+                torch.cuda.empty_cache()
 
         return loss_meter
 
