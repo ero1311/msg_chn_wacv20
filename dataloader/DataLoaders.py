@@ -20,6 +20,8 @@ from dataloader.KittiDepthDataset import KittiDepthDataset
 import random
 import glob
 from copy import deepcopy
+import numpy as np
+
 num_worker = 8
 
 def KittiDataLoader(params):
@@ -54,8 +56,12 @@ def KittiDataLoader(params):
 
     # Select the desired number of images from the training set
     if params['train_on'] != 'full':
-        image_datasets['train'].data = image_datasets['train'].data[0:params['train_on']]  # file directions
-        image_datasets['train'].gt = image_datasets['train'].gt[0:params['train_on']]
+        if params.get('train_idx') is not None:
+            image_datasets['train'].data = list(np.array(image_datasets['train'].data)[params['train_idx']])
+            image_datasets['train'].gt = list(np.array(image_datasets['train'].gt)[params['train_idx']])
+        else:
+            image_datasets['train'].data = image_datasets['train'].data[0:params['train_on']]  # file directions
+            image_datasets['train'].gt = image_datasets['train'].gt[0:params['train_on']]
 
     dataloaders['train'] = DataLoader(image_datasets['train'], shuffle=True, batch_size=params['train_batch_sz'],
                                       num_workers=num_worker)

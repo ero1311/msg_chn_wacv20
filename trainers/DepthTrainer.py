@@ -47,10 +47,11 @@ class KittiDepthTrainer(Trainer):
         self.load_rgb = params['load_rgb'] if 'load_rgb' in params else False
 
         self.exp_name = params['exp_name']
-        if self.params['vis_num'] < len(self.dataloaders['val']):
-            self.vis_idx = np.random.choice(len(self.dataloaders['val']), size=self.params['vis_num'], replace=False)
+        self.val_set = 'val' if 'val' in self.sets else 'selval'
+        if self.params['vis_num'] < len(self.dataloaders[self.val_set]):
+            self.vis_idx = np.random.choice(len(self.dataloaders[self.val_set]), size=self.params['vis_num'], replace=False)
         else:
-            self.vis_idx = np.arange(len(self.dataloaders['val']))
+            self.vis_idx = np.arange(len(self.dataloaders[self.val_set]))
         for s in self.sets:
             self.stats['{}_loss'.format(s)] = []
             for m in err_metrics:
@@ -109,8 +110,8 @@ class KittiDepthTrainer(Trainer):
 
             # Save checkpoint
             for m in err_metrics:
-                if self.stats['val_{}'.format(m[:-2])][self.epoch-1] < self.best_err[m[:-2]]:
-                    self.best_err[m[:-2]] = self.stats['val_{}'.format(m[:-2])][self.epoch-1]
+                if self.stats['{}_{}'.format(self.val_set, m[:-2])][self.epoch-1] < self.best_err[m[:-2]]:
+                    self.best_err[m[:-2]] = self.stats['{}_{}'.format(self.val_set, m[:-2])][self.epoch-1]
                     self.save_checkpoint(metric=m[:-2])
                     print('\n => Best checkpoint by {} was saved successfully!\n'.format(m[:-2]))
 
@@ -291,7 +292,7 @@ class KittiDepthTrainer(Trainer):
 
                     # Save output images (optional)
 
-                    if s == 'val' and (self.epoch - 1) % self.params["vis_every"] == 0:
+                    if s in ['val', 'selval'] and (self.epoch - 1) % self.params["vis_every"] == 0:
                         item_idxs = item_idxs.detach().cpu().numpy()
                         vis_id_pos = np.nonzero(np.isin(item_idxs, self.vis_idx))[0]
                         if vis_id_pos.shape[0] == 0:
@@ -323,23 +324,11 @@ class KittiDepthTrainer(Trainer):
                 torch.cuda.empty_cache()
     
     def _dump_log(self):
-        self.logger.add_scalars(
-            "log/loss",
-            {
-                "train": self.stats["train_loss"][self.epoch-1],
-                "val": self.stats["val_loss"][self.epoch-1]
-            },
-            self.epoch
-        )
+        dump_loss = dict(zip(self.sets, [self.stats["{}_loss".format(s)][self.epoch-1] for s in self.sets]))
+        self.logger.add_scalars("log/loss", dump_loss, self.epoch)
         for m in err_metrics:
-            self.logger.add_scalars(
-                "eval/{}".format(m[:-2]),
-                {
-                    "train": self.stats["train_{}".format(m[:-2])][self.epoch-1],
-                    "val": self.stats["val_{}".format(m[:-2])][self.epoch-1]
-                },
-                self.epoch
-            )
+            dump_m = dict(zip(self.sets, [self.stats["{}_{}".format(s, m[:-2])][self.epoch-1] for s in self.sets]))
+            self.logger.add_scalars("eval/{}".format(m[:-2]), dump_m, self.epoch)
 
 
 

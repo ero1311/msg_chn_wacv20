@@ -18,7 +18,6 @@ import importlib
 import json
 import argparse
 import numpy as np
-import glob
 
 import torch
 import torch.nn.functional as F
@@ -29,6 +28,8 @@ from os.path import join, basename, exists
 
 from dataloader.DataLoaders import *
 from modules.losses import *
+from datetime import datetime
+
 
 # Fix CUDNN error for non-contiguous inputs
 import torch.backends.cudnn as cudnn
@@ -44,6 +45,8 @@ torch.cuda.manual_seed(1)
 
 # Parse Arguments
 parser = argparse.ArgumentParser()
+parser.add_argument('--config', type=str, help="json config file name", default="params.json")
+parser.add_argument('--tag', type=str, help="tag for the training, e.g. cuda_wl", default="cuda_wl")
 parser.add_argument('-mode', action='store', dest='mode', default='train', help='"eval" or "train" mode')
 parser.add_argument('-exp', action='store', dest='exp', default='exp_msg_chn',
                     help='Experiment name as in workspace directory')
@@ -64,15 +67,11 @@ exp_dir = join(training_ws_path, exp)
 sys.path.append(exp_dir)
 
 # Read parameters file
-with open(join(exp_dir, 'params.json'), 'r') as fp:
+with open(join(exp_dir, args.config), 'r') as fp:
     params = json.load(fp)
 
-experiments = list(glob.iglob(join(exp_dir, 'experiment_*')))
-if len(experiments) == 0:
-    experiment = "experiment_0"
-else:
-    max_id = max(experiments, key=lambda x: int(basename(x).split("_")[1]))
-    experiment = "experiment_" + str(int(basename(max_id).split("_")[1]) + 1)
+experiment = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+experiment += "_" + args.tag.upper()
 exp_dir = join(exp_dir, experiment)
 if not exists(exp_dir):
     os.makedirs(join(exp_dir, 'tensorboard'))
