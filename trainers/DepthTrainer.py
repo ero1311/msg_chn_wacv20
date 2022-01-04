@@ -11,6 +11,7 @@ __maintainer__ = "Abdelrahman Eldesokey"
 __email__ = "abdo.eldesokey@gmail.com"
 ########################################
 
+from numpy.core.fromnumeric import std
 from trainers.trainer import Trainer  # from CVLPyDL repo
 import torch
 
@@ -20,6 +21,7 @@ from utils.saveTensorToImage import *
 from utils.ErrorMetrics import *
 import time
 from modules.losses import *
+import matplotlib.pyplot as plt
 import cv2
 import torchvision
 err_metrics = ['MAE()', 'RMSE()','iMAE()', 'iRMSE()']
@@ -227,6 +229,9 @@ class KittiDepthTrainer(Trainer):
 
         # AverageMeters for time
         times = AverageMeter()
+        stds = []
+        out_vals = []
+        out_gts = []
 
         device = torch.device("cuda:" + str(self.params['gpu_id']) if torch.cuda.is_available() else "cpu")
 
@@ -255,6 +260,13 @@ class KittiDepthTrainer(Trainer):
                     torch.cuda.synchronize()
                     duration = time.time() - start_time
                     times.update(duration / inputs_d.size(0), inputs_d.size(0))
+
+                    if s in ['val', 'selval']:
+                        # Save outputs and variances for uncertainty estimation evaluation
+                        valid_pixels = torch.ne(labels, 0)
+                        out_vals.append(outputs[valid_pixels].detach().cpu())
+                        stds.append(vars[valid_pixels].detach().cpu())
+                        out_gts.append(labels[valid_pixels].detach().cpu())
 
                     # Calculate loss for valid pixel in the ground truth
                     loss = self.objective(outputs, vars, labels)
@@ -306,9 +318,26 @@ class KittiDepthTrainer(Trainer):
 
                         saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, item_idxs, os.path.join(self.workspace_dir,
                                                                         "visualizations"), self.epoch)
-                    
-
-
+                if s in ['val', 'selval']:            
+                    out_vals = torch.concat(out_vals)
+                    stds = torch.concat(stds)
+                    out_gts = torch.concat(out_gts)           
+                    sort_idx = torch.argsort(stds)
+                    stds = stds[sort_idx]
+                    out_vals = out_vals[sort_idx]
+                    out_gts = out_gts[sort_idx]
+                    N = 100
+                    T = stds.shape[0]
+                    mstds = []
+                    maes = []
+                    for i in range(N - 1):
+                        start_int, end_int = i * T // N, (i + 1) * T // N
+                        mstds.append(torch.sqrt(torch.square(stds[start_int:end_int]).mean()).item())
+                        maes.append(torch.sqrt(torch.square(out_vals[start_int:end_int] - out_gts[start_int:end_int]).mean()).item())
+                    mstds.append(torch.sqrt(torch.square(stds[(N-1) * T // N:]).mean()).item())
+                    maes.append(torch.sqrt(torch.square(out_vals[(N-1) * T // N:] - out_gts[(N-1) * T // N:]).mean()).item())
+                    plt.plot(mstds, maes, 'bo')
+                    plt.savefig(os.path.join(self.workspace_dir, "visualizations", "epoch_{}_unc_eval.png".format(str(self.epoch - 1).zfill(4))))
 
                 average_time = (time.time() - Start_time) / len(self.dataloaders[s].dataset)
 

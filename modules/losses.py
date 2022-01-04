@@ -42,3 +42,16 @@ class GaussianNLL(nn.Module):
     def forward(self, outputs_d, outputs_var, target):
         val_pixels = torch.ne(target, 0)
         return F.gaussian_nll_loss(outputs_d[val_pixels], target[val_pixels], outputs_var[val_pixels])
+
+class LaplacianNLL(nn.Module):
+    def __init__(self) -> None:
+        super(LaplacianNLL, self).__init__()
+    
+    def forward(self, outputs_d, outputs_var, target):
+        val_pixels = torch.ne(target, 0)
+        eps = 1e-6
+        with torch.no_grad():
+            var = outputs_var[val_pixels].clamp_(min=eps)
+        
+        loss = torch.log(var) + torch.abs(outputs_d[val_pixels] - target[val_pixels]) / var
+        return torch.mean(loss)
