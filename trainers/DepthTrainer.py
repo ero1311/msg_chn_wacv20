@@ -42,12 +42,18 @@ class KittiDepthTrainer(Trainer):
         self.best_err = {}
         self.params = params
         self.save_chkpt_each = params['save_chkpt_each']
+        self.mc_iters = params['mc_iters']
+        self.mc_drop = params['mc_drop']
         self.sets = sets
         self.save_images = params['save_out_imgs']
         self.load_rgb = params['load_rgb'] if 'load_rgb' in params else False
 
         self.exp_name = params['exp_name']
-        self.vis_id = np.random.randint(low=0, high=len(self.dataloaders['val']))
+        self.val_set = 'val' if 'val' in self.sets else 'selval'
+        if self.params['vis_num'] < len(self.dataloaders[self.val_set]):
+            self.vis_idx = np.random.choice(len(self.dataloaders[self.val_set]), size=self.params['vis_num'], replace=False)
+        else:
+            self.vis_idx = np.arange(len(self.dataloaders[self.val_set]))
         for s in self.sets:
             self.stats['{}_loss'.format(s)] = []
             for m in err_metrics:
@@ -240,11 +246,18 @@ class KittiDepthTrainer(Trainer):
                     C = C.to(device)
                     labels = labels.to(device)
                     inputs_rgb = inputs_rgb.to(device)
-                    outputs = self.net(inputs_d, inputs_rgb)
+                    if self.mc_drop:
+                        outputs = []
+                        for i in range(self.mc_iters):
+                            outputs.append(self.net(inputs_d, inputs_rgb)[0])
+                        outputs = torch.cat(outputs)                  
+                    else:
+                        outputs = self.net(inputs_d, inputs_rgb)
 
+                    vars, outputs = torch.var_mean(outputs, dim=0, keepdim=True) 
 
-                    if len(outputs) > 1:
-                        outputs = outputs[0]
+                    #if len(outputs) > 1:
+                    #    outputs = outputs[0]
 
                     torch.cuda.synchronize()
                     duration = time.time() - start_time
@@ -286,16 +299,20 @@ class KittiDepthTrainer(Trainer):
 
                     # Save output images (optional)
 
-                    if self.vis_id in item_idxs and s == 'val' and (self.epoch - 1) % self.params["vis_every"] == 0:
-                        vis_id_pos = torch.where(item_idxs == self.vis_id)[0]
+                    if s in ['val', 'selval'] and (self.epoch - 1) % self.params["vis_every"] == 0:
+                        item_idxs = item_idxs.detach().cpu().numpy()
+                        vis_id_pos = np.nonzero(np.isin(item_idxs, self.vis_idx))[0]
+                        if vis_id_pos.shape[0] == 0:
+                            continue
                         outputs = outputs[vis_id_pos].detach().cpu().numpy()
+                        vars = vars[vis_id_pos].detach().cpu().numpy()
                         labels = labels[vis_id_pos].detach().cpu().numpy()
                         inputs_d = inputs_d[vis_id_pos].detach().cpu().numpy()
                         inputs_rgb = inputs_rgb[vis_id_pos].detach().cpu().numpy()
+                        item_idxs = item_idxs[vis_id_pos]
 
-                        saveTensorToImage(outputs, labels, inputs_d, inputs_rgb, os.path.join(self.workspace_dir,
+                        saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, item_idxs, os.path.join(self.workspace_dir,
                                                                         "visualizations"), self.epoch)
-                    
 
 
 

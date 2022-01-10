@@ -1,6 +1,7 @@
 **/__pycache__/
 **/.ipynb_checkpoints/
 **/experiment_*/
+**/[0-9][0-9][0-9][0-9]-*
 
 #supervisor files
 *.pid

@@ -23,9 +23,12 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
+from os.path import join, basename, exists
 
 from dataloader.DataLoaders import *
 from modules.losses import *
+from datetime import datetime
 
 
 # Fix CUDNN error for non-contiguous inputs
@@ -35,20 +38,21 @@ cudnn.enabled = True
 cudnn.benchmark = True
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 torch.manual_seed(1)
 
 # Parse Arguments
 parser = argparse.ArgumentParser()
+parser.add_argument('--config', type=str, help="json config file name", default="params.json")
+parser.add_argument('--tag', type=str, help="tag for the training, e.g. cuda_wl", default="cuda_wl")
 parser.add_argument('-mode', action='store', dest='mode', default='eval', help='"eval" or "train" mode')
 parser.add_argument('-exp', action='store', dest='exp', default='exp_msg_chn',
                     help='Experiment name as in workspace directory')
 #parser.add_argument('-chkpt', action='store', dest='chkpt', default=50,  nargs='?',   # None or number
 parser.add_argument('-chkpt', action='store', dest='chkpt', default="/PATH/TO/YOUR/CHECKPOINT_FILE.pth.tar",
                     help='Checkpoint number to load')
-
+parser.add_argument('--mc_drop', action='store_true', help='validate with MC Dropout')
 parser.add_argument('-set', action='store', dest='set', default='selval', type=str, nargs='?',
                     help='Which set to evaluate on "val", "selval" or "test"')
 args = parser.parse_args()
@@ -64,10 +68,16 @@ exp_dir = os.path.join(training_ws_path, exp)
 sys.path.append(exp_dir)
 
 # Read parameters file
-with open(os.path.join(exp_dir, 'params.json'), 'r') as fp:
+with open(join(exp_dir, args.config), 'r') as fp:
     params = json.load(fp)
-params['gpu_id'] = "0"
 
+experiment = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+experiment += "_" + args.tag.upper()
+exp_dir = join(exp_dir, experiment)
+if not exists(exp_dir):
+    os.makedirs(join(exp_dir, 'tensorboard'))
+
+logger = SummaryWriter(join(exp_dir, 'tensorboard'))
 # Use GPU or not
 #device = torch.device("cuda:" + str(params['gpu_id']) if torch.cuda.is_available() else "cpu")
 device = torch.device("cuda:" + params['gpu_id'] if torch.cuda.is_available() else "cpu")
@@ -78,9 +88,10 @@ dataloaders, dataset_sizes = eval(data_loader)(params)
 
 # Import the network file
 f = importlib.import_module('network_' + exp)
-model = f.network().to(device)#pos_fn=params['enforce_pos_weights']
+model = f.network(mc_drop=args.mc_drop).to(device)#pos_fn=params['enforce_pos_weights']
+print(model)
 model = nn.DataParallel(model)
-
+params['mc_drop'] = args.mc_drop
 
 # Import the trainer
 t = importlib.import_module('trainers.' + params['trainer'])

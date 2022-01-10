@@ -10,6 +10,14 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 
+class AlwaysOnDropout(nn.Module):
+    def __init__(self, p: float = 0.25):
+        super().__init__()
+        self.p = p
+
+    def forward(self, x):
+        return nn.functional.dropout(x, p=self.p, training=True)
+
 class DepthEncoder(nn.Module):
     def __init__(self, in_layers, layers, filter_size):
         super(DepthEncoder, self).__init__()
@@ -114,8 +122,10 @@ class RGBEncoder(nn.Module):
 
 
 class DepthDecoder(nn.Module):
-    def __init__(self, layers, filter_size):
+    def __init__(self, layers, filter_size, mc_drop=False):
         super(DepthDecoder, self).__init__()
+        self.mc_drop = mc_drop
+        self.dropout = AlwaysOnDropout()
         padding = int((filter_size - 1) / 2)
 
         self.dec2 = nn.Sequential(nn.ReLU(),
@@ -153,7 +163,8 @@ class DepthDecoder(nn.Module):
 
         x3 = self.dec2(x2)  # 1/2 input size
         x4 = self.dec1(x1 + x3)  # 1/1 input size
-
+        if self.mc_drop:
+            x4 = self.dropout(x4)
         ### prediction
         output_d = self.prdct(x4 + x0)
 
@@ -161,7 +172,7 @@ class DepthDecoder(nn.Module):
 
 
 class network(nn.Module):
-    def __init__(self):
+    def __init__(self, mc_drop=False):
         super(network, self).__init__()
 
         denc_layers = 32
@@ -171,13 +182,13 @@ class network(nn.Module):
         self.rgb_encoder = RGBEncoder(3, cenc_layers, 3)
 
         self.depth_encoder1 = DepthEncoder(1, denc_layers, 3)
-        self.depth_decoder1 = DepthDecoder(ddcd_layers, 3)
+        self.depth_decoder1 = DepthDecoder(ddcd_layers, 3, mc_drop=mc_drop)
 
         self.depth_encoder2 = DepthEncoder(2, denc_layers, 3)
-        self.depth_decoder2 = DepthDecoder(ddcd_layers, 3)
+        self.depth_decoder2 = DepthDecoder(ddcd_layers, 3, mc_drop=mc_drop)
 
         self.depth_encoder3 = DepthEncoder(2, denc_layers, 3)
-        self.depth_decoder3 = DepthDecoder(ddcd_layers, 3)
+        self.depth_decoder3 = DepthDecoder(ddcd_layers, 3, mc_drop=mc_drop)
 
     def forward(self, input_d, input_rgb):
         C = (input_d > 0).float()
