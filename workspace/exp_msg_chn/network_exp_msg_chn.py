@@ -131,6 +131,12 @@ class DepthDecoder(nn.Module):
                                   nn.ReLU(),
                                   nn.Conv2d(layers // 2, layers // 2, filter_size, stride=1, padding=padding),
                                   )
+        self.dec1_var = nn.Sequential(nn.ReLU(),
+                                  nn.ConvTranspose2d(layers // 2, layers // 2, filter_size, stride=2, padding=padding,
+                                                     output_padding=padding),
+                                  nn.ReLU(),
+                                  nn.Conv2d(layers // 2, layers // 2, filter_size, stride=1, padding=padding),
+                                  )
 
         self.out_base = nn.Sequential(nn.ReLU(),
                                    nn.Conv2d(layers // 2, layers // 2, filter_size, stride=1, padding=padding),
@@ -157,10 +163,11 @@ class DepthDecoder(nn.Module):
 
         x3 = self.dec2(x2)  # 1/2 input size
         x4 = self.dec1(x1 + x3)  # 1/1 input size
+        x4_var = self.dec1_var(x1 + x3)
 
         ### prediction
         out_base = self.out_base(x4 + x0)
-        out_base_var = self.out_base_var(x4 + x0)
+        out_base_var = self.out_base_var(x4_var + x0)
         output_d = self.output_d(out_base)
         var = torch.exp(self.variance(out_base_var))
 
