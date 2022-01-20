@@ -336,7 +336,10 @@ class KittiDepthTrainer(Trainer):
                         maes.append(torch.sqrt(torch.square(out_vals[start_int:end_int] - out_gts[start_int:end_int]).mean()).item())
                     mstds.append(torch.sqrt(torch.square(stds[(N-1) * T // N:]).mean()).item())
                     maes.append(torch.sqrt(torch.square(out_vals[(N-1) * T // N:] - out_gts[(N-1) * T // N:]).mean()).item())
-                    plt.plot(mstds, maes, 'bo')
+                    plt.plot(mstds, maes, marker='o')
+                    plt.title('Uncertainty Evaluation')
+                    plt.xlabel('RMV')
+                    plt.ylabel('RMSE')
                     plt.savefig(os.path.join(self.workspace_dir, "visualizations", "epoch_{}_unc_eval.png".format(str(self.epoch - 1).zfill(4))))
 
                 average_time = (time.time() - Start_time) / len(self.dataloaders[s].dataset)
