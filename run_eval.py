@@ -126,8 +126,3 @@ if mode == 'train':
     net = mytrainer.train(params['num_epochs'])  #
 else:
     net = mytrainer.evaluate()
-
-
-
-
-
