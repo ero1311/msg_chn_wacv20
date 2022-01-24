@@ -40,7 +40,7 @@ cudnn.benchmark = True
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
 TRAIN_POOL_SIZE = 85898
-LRS = [0.0005, 0.0001, 0.00005, 0.00001, 0.000005]
+LRS = [0.001, 0.0005, 0.0001, 0.00005, 0.00001, 0.000005]
 WDS = [0.02, 0.002, 0.0002, 0.00002, 0.000002]
 #torch.manual_seed(1)
 torch.cuda.manual_seed(1)
@@ -122,9 +122,4 @@ for lr in LRS:
 
 
         net = mytrainer.train(params['num_epochs'])  #
-
-
-
-
-
 
