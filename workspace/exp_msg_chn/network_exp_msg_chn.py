@@ -182,10 +182,10 @@ class network(nn.Module):
         self.rgb_encoder = RGBEncoder(3, cenc_layers, 3)
 
         self.depth_encoder1 = DepthEncoder(1, denc_layers, 3)
-        self.depth_decoder1 = DepthDecoder(ddcd_layers, 3, mc_drop=mc_drop)
+        self.depth_decoder1 = DepthDecoder(ddcd_layers, 3)
 
         self.depth_encoder2 = DepthEncoder(2, denc_layers, 3)
-        self.depth_decoder2 = DepthDecoder(ddcd_layers, 3, mc_drop=mc_drop)
+        self.depth_decoder2 = DepthDecoder(ddcd_layers, 3)
 
         self.depth_encoder3 = DepthEncoder(2, denc_layers, 3)
         self.depth_decoder3 = DepthDecoder(ddcd_layers, 3, mc_drop=mc_drop)

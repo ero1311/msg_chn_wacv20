@@ -18,6 +18,7 @@ import os.path
 from utils.AverageMeter import AverageMeter
 from utils.saveTensorToImage import *
 from utils.ErrorMetrics import *
+from utils.bisection import *
 import time
 from modules.losses import *
 import cv2
@@ -188,7 +189,7 @@ class KittiDepthTrainer(Trainer):
 
     ####### Evaluation Function #######
 
-    def evaluate(self):
+    def evaluate(self, calibrate=False):
         print('< Evaluate mode ! >')
 
         # Load last save checkpoint
@@ -324,9 +325,28 @@ class KittiDepthTrainer(Trainer):
                         saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, item_idxs, os.path.join(self.workspace_dir,
                                                                         "visualizations"), self.epoch)
                 if s in ['val', 'selval']:
+                    std_const = 1     
+                    if calibrate:
+                        calib_idx = np.random.choice(len(out_vals), size=(len(out_vals) // 5), replace=False)
+                        print(calib_idx.shape[0], len(out_vals))
+                        val_idx = np.setdiff1d(np.arange(len(out_vals)), calib_idx)
+                        T = 0
+                        C = 0
+                        for j in calib_idx:
+                            C += torch.sum(torch.square((out_vals[j] - out_gts[j]) / stds[j]))
+                            T += len(out_vals[j])
+                        print("Num points: {}, error over std: {}".format(T, C))
+                        std_const = bisection(nll_s, T, C)
+                        print("Calibration constant is: {}".format(std_const))
+                        out_vals = [out_vals[j] for j in val_idx]
+                        stds = [stds[j] for j in val_idx]
+                        out_gts = [out_gts[j] for j in val_idx]
+                        print(len(out_vals))
+
                     out_vals = torch.concat(out_vals)
                     stds = torch.concat(stds)
-                    out_gts = torch.concat(out_gts)           
+                    out_gts = torch.concat(out_gts)
+                    stds *= std_const           
                     sort_idx = torch.argsort(stds)
                     stds = stds[sort_idx]
                     out_vals = out_vals[sort_idx]
