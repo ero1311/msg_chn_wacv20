@@ -101,6 +101,9 @@ if args.mode == 'train':
 elif args.mode == 'eval':
     mode = 'eval'  # train    eval
     sets = [args.set]  # train  selval
+elif args.mode == 'calibrate_eval':
+    mode = 'calibrate_eval'
+    sets = [args.set]
 
 kk=0
 # Objective function
@@ -124,7 +127,7 @@ if mode == 'train':
     # train the network
     net = mytrainer.train(params['num_epochs'])  #
 else:
-    net = mytrainer.evaluate()
+    net = mytrainer.evaluate(calibrate=(mode == 'calibrate_eval'))
 
 
 
