@@ -265,6 +265,8 @@ class KittiDepthTrainer(Trainer):
                     if s in ['val', 'selval']:
                         # Save outputs and variances for uncertainty estimation evaluation
                         valid_pixels = torch.ne(labels, 0)
+                        mae_map = torch.zeros_like(vars)
+                        mae_map[valid_pixels] = torch.abs(outputs[valid_pixels] - labels[valid_pixels])
                         out_vals.append(outputs[valid_pixels].detach().cpu())
                         stds.append(vars[valid_pixels].detach().cpu())
                         out_gts.append(labels[valid_pixels].detach().cpu())
@@ -315,9 +317,10 @@ class KittiDepthTrainer(Trainer):
                         labels = labels[vis_id_pos].detach().cpu().numpy()
                         inputs_d = inputs_d[vis_id_pos].detach().cpu().numpy()
                         inputs_rgb = inputs_rgb[vis_id_pos].detach().cpu().numpy()
+                        mae_map = mae_map[vis_id_pos].detach().cpu().numpy()
                         item_idxs = item_idxs[vis_id_pos]
 
-                        saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, item_idxs, os.path.join(self.workspace_dir,
+                        saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, mae_map, item_idxs, os.path.join(self.workspace_dir,
                                                                         "visualizations"), self.epoch)
                 if s in ['val', 'selval']:
                     std_const = 1     

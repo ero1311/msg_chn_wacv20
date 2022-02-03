@@ -2,7 +2,7 @@
     "debug": false,
     "gpu_id": "0",
     "vis_every": 1,
-    "vis_num": 5,
+    "vis_num": 1000,
     "invert_depth": false,
     "data_normalize_factor": 256.0,
     "dataset_dir": "/mnt/raid/yan/KITTI/KITTIDepth/",

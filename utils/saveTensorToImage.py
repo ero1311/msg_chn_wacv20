@@ -27,7 +27,7 @@ def colorize_depth(x, cmap):
     return depth.astype('uint8')
 
 # This function takes a 4D tensor in the form NxCxWxH and save it to images according to idxs
-def saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, item_idxs, save_to_path, epoch):
+def saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, mae_map, item_idxs, save_to_path, epoch):
     if os.path.exists(save_to_path) == False:
         os.mkdir(save_to_path)
 
@@ -39,6 +39,7 @@ def saveTensorToImage(outputs, vars, labels, inputs_d, inputs_rgb, item_idxs, sa
         final_img.append(colorize_depth(inputs_d[t], cmap_depth))
         final_img.append(colorize_depth(outputs[t], cmap_depth))
         final_img.append(colorize_depth(vars[t], cmap_uncertainty))
+        final_img.append(colorize_depth(mae_map[t], cmap_uncertainty))
         final_img.append(colorize_depth(labels[t], cmap_depth))
         final_img = np.hstack(final_img).astype('uint8')
         imout = cv2.cvtColor(final_img, cv2.COLOR_RGB2BGR)
